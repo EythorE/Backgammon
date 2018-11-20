@@ -13,7 +13,6 @@ import keras
 import keras.layers as L
 import matplotlib.pyplot as plt
 import os.path
-import copy
 
 class backgammon:
     def __init__(self):
@@ -110,10 +109,23 @@ class AgentGroupJ:
         self._critic_loss = -tf.reduce_sum(tf.stop_gradient(self._advantage) * self._current_state_values)
         self._actor_loss = -tf.reduce_sum(tf.stop_gradient(self._advantage) * self._actor_log_policy)
         self._actor_loss -= entropy * self._actor_entropy
-
+        
         self._optimizer = tf.train.AdamOptimizer(learning_rate)
         self._update = self._optimizer.minimize(self._actor_loss + self._critic_loss, global_step = self._iters)
+        
+        
+        
+        #tf.summary.scalar('critic_loss', self._critic_loss)
+        #tf.summary.scalar('actor_loss', self._actor_loss)
+        self._winrate = tf.Variable(0, trainable = False)
+        tf.summary.scalar('Win_rate', self._winrate)
+        self._merged = tf.summary.merge_all()
+        
         self._s.run(tf.global_variables_initializer())
+
+        
+        self._file_writer = tf.summary.FileWriter("./Tboard",
+                                    tf.get_default_graph())
         
         self._saver = tf.train.Saver()
         if os.path.isfile(self._path + ".index") and read_file:
@@ -131,12 +143,12 @@ class AgentGroupJ:
     
     def update(self, currstates, afterstates, cumulative_rewards, is_terminal):
         
-        self._s.run(self._update, 
+        _, iterations = self._s.run([self._update, self._iters], 
                     ({self._currstates: currstates,
                       self._afterstates: afterstates, 
                       self._is_terminal: is_terminal,
                       self._cumulative_rewards: cumulative_rewards}))
-        if self._s.run(self._iters % 100) == 0:
+        if (iterations % 100) == 0:
             self.save_network()
         
     def get_cumulative_rewards(self, rewards):
@@ -212,50 +224,6 @@ class AgentGroupJ:
             wins.append(float(reward == 1))
         
         return(np.mean(wins))
-        
-    def PlayOldSelf(self, old_self, test_games = 20):
-        wins = []
-    
-        for _ in range(test_games):
-    
-            env = backgammon()
-            done = False
-    
-            while not done:
-                dice = B.roll_dice()
-                for _ in range(1 + int(dice[0] == dice[1])):
-    
-                    possible_moves, possible_boards = env.legal_moves(dice, 1)
-                    n_actions = len(possible_moves)
-    
-                    if n_actions == 0:
-                        break
-    
-                    action = self.sample_action(possible_boards)
-                    old_board, new_board, reward, done = env.step(possible_moves[action])
-    
-                    if done:
-                        break
-    
-                if not done:
-                    dice = B.roll_dice()
-    
-                    for _ in range(1 + int(dice[0] == dice[1])):
-                            possible_moves, possible_boards = env.legal_moves(dice, 1)
-                            n_actions = len(possible_moves)
-            
-                            if n_actions == 0:
-                                break
-            
-                            action = old_self.sample_action(possible_boards)
-                            old_board, new_board, reward, done = env.step(possible_moves[action])
-                            if done:
-                                reward = -1
-                                break
-    
-            wins.append(float(reward == 1))
-        
-        return(np.mean(wins))
     
     def SelfPlay(self, n_envs = 10, n_games = 1000, test_each = 100, test_games = 20, verbose = True):
         
@@ -271,8 +239,6 @@ class AgentGroupJ:
 
         active = np.zeros(n_envs, dtype = "int")
         
-        old_self = copy.copy(self)
-        
         while played_games < n_games:
             for i in range(n_envs):
                 dice = B.roll_dice()
@@ -284,7 +250,7 @@ class AgentGroupJ:
                     if n_actions == 0:
                         break
 
-            
+
                     action = self.sample_action(possible_boards)
                     old_board, new_board, reward, done = envs[i].step(possible_moves[action], player = 1)
 
@@ -330,21 +296,30 @@ class AgentGroupJ:
 
 
                 if (played_games + 1) % test_each == 0 and verbose and plot:
+
+                    
                     plot = False
-                    outcome1 = self.PlayRandomAgent(test_games = test_games)
-                    outcome2 = self.PlayOldSelf(old_self = old_self, test_games = test_games)
-                    old_self = copy.copy(self)
-                    win_pct.append([outcome1, outcome2])
-                    example = self.ExamplePolicy()
-                    #print("Win percentage: %.5f" % (win_pct[-1]))
-                    print("Example policy: \n", example)
-    
-                    plt.figure()
-                    x = [(n + 1) * test_each for n in range(len(win_pct))]
-                    y = (100*np.vstack(win_pct)).astype('int')
-                    plt.plot(x, y)
-                    plt.legend(["Random Agent", "Old Self"])
-                    plt.xlabel('Episode')
-                    plt.ylabel('Win percentage of last 100 episodes')
-                    plt.ylim(0, 100)
-                    plt.show()  
+                    outcome = self.PlayRandomAgent(test_games = test_games)
+#                    win_pct.append(outcome)
+#                    example = self.ExamplePolicy()
+#                    print("Win percentage: %.5f" % (win_pct[-1]))
+#                    print("Example policy: \n", example)
+                    
+                    
+                                        
+                    summary, gstep = self._s.run([self._merged, self._iters],({self._winrate: 100*outcome}))
+                    self._file_writer.add_summary(summary, gstep)
+                    
+                    # Run 
+                    #> tensorboard --logdir=.\Tboard
+                    # open http://localhost:6006
+                    
+                    
+#                    plt.figure()
+#                    x = [(n + 1) * test_each for n in range(len(win_pct))]
+#                    y = (100*np.array(win_pct)).astype('int')
+#                    plt.plot(x, y)
+#                    plt.xlabel('Episode')
+#                    plt.ylabel('Win percentage of last 100 episodes')
+#                    plt.ylim(0, 100)
+#                    plt.show()  

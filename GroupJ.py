@@ -9,50 +9,31 @@ import numpy as np
 import Backgammon as B
 import flipped_agent as FA
 import tensorflow as tf
-import keras
-import keras.layers as L
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import os.path
 
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.layers import l2_regularizer
 
 def network(inputs):
-#    with tf.variable_scope('Shared', reuse=tf.AUTO_REUSE):
-#        net = tf.layers.dropout(inputs, rate=0.2)
-#        net = tf.layers.dense(net, 32, activation=tf.nn.leaky_relu,
-#                              kernel_initializer=xavier_initializer(),
-#                              kernel_regularizer=l2_regularizer(0.01),
-#                              name="hidden_1")
-#        net = tf.layers.dense(net, 64, activation=tf.nn.leaky_relu,
-#                              kernel_initializer=xavier_initializer(),
-#                              kernel_regularizer=l2_regularizer(0.01),
-#                              name="hidden_2")
-#        net = tf.layers.dense(net, 32, activation=tf.nn.leaky_relu,
-#                              kernel_initializer=xavier_initializer(),
-#                              kernel_regularizer=l2_regularizer(0.01),
-#                              name="hidden_3")
-#        net = tf.layers.dense(net, 1, name="shared_out")
-#    
-#    return net
-
+    with tf.variable_scope('Shared', reuse=tf.AUTO_REUSE):
+        net = tf.layers.dropout(inputs, rate=0.2)
+        net = tf.layers.dense(net, 32, activation=tf.nn.leaky_relu,
+                              kernel_initializer=xavier_initializer(),
+                              kernel_regularizer=l2_regularizer(0.01),
+                              name="hidden_1")
+        net = tf.layers.dense(net, 64, activation=tf.nn.leaky_relu,
+                              kernel_initializer=xavier_initializer(),
+                              kernel_regularizer=l2_regularizer(0.01),
+                              name="hidden_2")
+        net = tf.layers.dense(net, 32, activation=tf.nn.leaky_relu,
+                              kernel_initializer=xavier_initializer(),
+                              kernel_regularizer=l2_regularizer(0.01),
+                              name="hidden_3")
+        net = tf.layers.dense(net, 1, name="shared_out")
     
-    net = keras.models.Sequential()
-    net.add(L.Dropout(0.2))
-    net.add(L.Dense(32, 
-                              kernel_regularizer = keras.regularizers.l2(0.01),
-                              kernel_initializer = keras.initializers.glorot_normal(seed=None)))
-    net.add(L.LeakyReLU())
-    net.add(L.Dense(64,
-                              kernel_regularizer = keras.regularizers.l2(0.01),
-                              kernel_initializer = keras.initializers.glorot_normal(seed=None)))
-    net.add(L.LeakyReLU())
-    net.add(L.Dense(32, 
-                              kernel_regularizer = keras.regularizers.l2(0.01),
-                              kernel_initializer = keras.initializers.glorot_normal(seed=None)))
-    net.add(L.LeakyReLU())
-    net.add(L.Dense(1))
     return net
+
 
 class backgammon:
     def __init__(self):
@@ -111,13 +92,11 @@ class AgentGroupJ:
         self._is_terminal = tf.placeholder("float32", (None, 1), name = "IsTerminal")
         self._cumulative_rewards = tf.placeholder("float32", (None, 1), name = "Rewards")
         
-        # Network
-        #with tf.variable_scope("shared", reuse=tf.AUTO_REUSE):
-        self._network = network(None)
 
+        self._network = network
+    
         # Predictions
         ## Critic
-        
         self._current_state_values = tf.nn.tanh(self._network(self._currstates))
         self._afterstate_values = tf.nn.tanh(self._network(self._afterstates)) * (1 - self._is_terminal)
 
@@ -140,8 +119,7 @@ class AgentGroupJ:
         self._optimizer = tf.train.AdamOptimizer(learning_rate)
         self._update = self._optimizer.minimize(self._actor_loss + self._critic_loss, global_step = self._iters)
         
-        
-        
+
         #tf.summary.scalar('critic_loss', self._critic_loss)
         #tf.summary.scalar('actor_loss', self._actor_loss)
         self._winrate = tf.Variable(0, trainable = False)

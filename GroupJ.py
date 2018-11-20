@@ -14,6 +14,46 @@ import keras.layers as L
 import matplotlib.pyplot as plt
 import os.path
 
+from tensorflow.contrib.layers import xavier_initializer
+from tensorflow.contrib.layers import l2_regularizer
+
+def network(inputs):
+#    with tf.variable_scope('Shared', reuse=tf.AUTO_REUSE):
+#        net = tf.layers.dropout(inputs, rate=0.2)
+#        net = tf.layers.dense(net, 32, activation=tf.nn.leaky_relu,
+#                              kernel_initializer=xavier_initializer(),
+#                              kernel_regularizer=l2_regularizer(0.01),
+#                              name="hidden_1")
+#        net = tf.layers.dense(net, 64, activation=tf.nn.leaky_relu,
+#                              kernel_initializer=xavier_initializer(),
+#                              kernel_regularizer=l2_regularizer(0.01),
+#                              name="hidden_2")
+#        net = tf.layers.dense(net, 32, activation=tf.nn.leaky_relu,
+#                              kernel_initializer=xavier_initializer(),
+#                              kernel_regularizer=l2_regularizer(0.01),
+#                              name="hidden_3")
+#        net = tf.layers.dense(net, 1, name="shared_out")
+#    
+#    return net
+
+    
+    net = keras.models.Sequential()
+    net.add(L.Dropout(0.2))
+    net.add(L.Dense(32, 
+                              kernel_regularizer = keras.regularizers.l2(0.01),
+                              kernel_initializer = keras.initializers.glorot_normal(seed=None)))
+    net.add(L.LeakyReLU())
+    net.add(L.Dense(64,
+                              kernel_regularizer = keras.regularizers.l2(0.01),
+                              kernel_initializer = keras.initializers.glorot_normal(seed=None)))
+    net.add(L.LeakyReLU())
+    net.add(L.Dense(32, 
+                              kernel_regularizer = keras.regularizers.l2(0.01),
+                              kernel_initializer = keras.initializers.glorot_normal(seed=None)))
+    net.add(L.LeakyReLU())
+    net.add(L.Dense(1))
+    return net
+
 class backgammon:
     def __init__(self):
         self.board = B.init_board()
@@ -72,25 +112,12 @@ class AgentGroupJ:
         self._cumulative_rewards = tf.placeholder("float32", (None, 1), name = "Rewards")
         
         # Network
-        self._s = tf.Session()
-        self._network = keras.models.Sequential()
-        self._network.add(L.Dropout(0.2))
-        self._network.add(L.Dense(32, 
-                                  kernel_regularizer = keras.regularizers.l2(0.01),
-                                  kernel_initializer = keras.initializers.glorot_normal(seed=None)))
-        self._network.add(L.LeakyReLU())
-        self._network.add(L.Dense(64,
-                                  kernel_regularizer = keras.regularizers.l2(0.01),
-                                  kernel_initializer = keras.initializers.glorot_normal(seed=None)))
-        self._network.add(L.LeakyReLU())
-        self._network.add(L.Dense(32, 
-                                  kernel_regularizer = keras.regularizers.l2(0.01),
-                                  kernel_initializer = keras.initializers.glorot_normal(seed=None)))
-        self._network.add(L.LeakyReLU())
-        self._network.add(L.Dense(1))
+        #with tf.variable_scope("shared", reuse=tf.AUTO_REUSE):
+        self._network = network(None)
 
         # Predictions
         ## Critic
+        
         self._current_state_values = tf.nn.tanh(self._network(self._currstates))
         self._afterstate_values = tf.nn.tanh(self._network(self._afterstates)) * (1 - self._is_terminal)
 
@@ -121,10 +148,15 @@ class AgentGroupJ:
         tf.summary.scalar('Win_rate', self._winrate)
         self._merged = tf.summary.merge_all()
         
+        self._s = tf.Session()
         self._s.run(tf.global_variables_initializer())
-
         
-        self._file_writer = tf.summary.FileWriter("./Tboard",
+        
+
+        from datetime import datetime
+        now = datetime.now()
+        logdir = "./Tboard/" + now.strftime("%Y%m%d-%H%M%S") + "/"
+        self._file_writer = tf.summary.FileWriter(logdir,
                                     tf.get_default_graph())
         
         self._saver = tf.train.Saver()
@@ -226,6 +258,8 @@ class AgentGroupJ:
         return(np.mean(wins))
     
     def SelfPlay(self, n_envs = 10, n_games = 1000, test_each = 100, test_games = 20, verbose = True):
+        import time
+        tic = time.time()
         
         win_pct = []
         played_games = 0
@@ -304,7 +338,9 @@ class AgentGroupJ:
 #                    example = self.ExamplePolicy()
 #                    print("Win percentage: %.5f" % (win_pct[-1]))
 #                    print("Example policy: \n", example)
-                    
+                    toc = time.time()
+                    print(toc-tic)
+                    tic = toc
                     
                                         
                     summary, gstep = self._s.run([self._merged, self._iters],({self._winrate: 100*outcome}))
